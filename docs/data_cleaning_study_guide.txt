@@ -1,0 +1,120 @@
+DATA CLEANING STUDY GUIDE
+=========================
+This document explains the step-by-step process of our data cleaning script, including the Python/pandas code used for each step.
+
+---
+
+STEP 1: Load the Data & Remove Junk Columns
+-------------
+Explanation: We start by loading the CSV file into a "DataFrame" (a table in pandas). Raw datasets often come with an index column saved as 'Unnamed: 0'. We don't need it, so we delete it.
+
+Code:
+import pandas as pd
+import numpy as np
+
+# Load the raw data
+df = pd.read_csv('data/raw/DataAnalyst.csv')
+
+# Drop the 'Unnamed: 0' index column if it exists
+if 'Unnamed: 0' in df.columns:
+    df = df.drop(columns=['Unnamed: 0'])
+
+
+---
+
+STEP 2: Standardizing Missing Data
+-------------
+Explanation: In this dataset, missing values weren't natively empty. They were entered as strings like '-1', '-1.0', or 'Unknown'. We search the whole dataset for these specific "junk" values and replace them with `np.nan` (Not a Number), which is the official empty value in Python pandas.
+
+Code:
+# Replace known missing value indicators with NaNs
+df = df.replace(['-1', -1, '-1.0', -1.0, 'Unknown', 'Unknown / Non-Applicable'], np.nan)
+
+
+---
+
+STEP 3: Parsing the "Salary Estimate"
+-------------
+Explanation: Salaries were formatted as messy text like "$37K-$66K (Glassdoor est.)". We wrote a custom function called `parse_salary` to clean this string and split it into three numbers: a minimum salary, a maximum salary, and an average salary.
+
+Code snippet inside the loop:
+def parse_salary(salary_str):
+    # If the value is missing, return empty NaNs
+    if pd.isna(salary_str):
+        return pd.Series([np.nan, np.nan, np.nan])
+    
+    # 1. Chop off "(Glassdoor est.)" at the end
+    clean_str = str(salary_str).split('(')[0]
+    
+    # 2. Check if it's hourly or has "Employer Provided" text
+    is_hourly = 'Per Hour' in clean_str
+    if is_hourly:
+        clean_str = clean_str.replace('Per Hour', '')
+    if 'Employer Provided Salary:' in clean_str:
+        clean_str = clean_str.replace('Employer Provided Salary:', '')
+        
+    # 3. Strip out the 'K' and '$' signs
+    clean_str = clean_str.replace('K', '').replace('$', '').strip()
+    
+    # 4. Split the text string by the hyphen into two variables
+    parts = clean_str.split('-')
+    if len(parts) == 2:
+        min_s = float(parts[0])  # Convert text to decimal number
+        max_s = float(parts[1])
+        
+        # 5. If it was an hourly wage, multiply it out to annual
+        if is_hourly:
+            min_s = (min_s * 2080) / 1000
+            max_s = (max_s * 2080) / 1000
+            
+        # 6. Return min, max, and calculate the average between the two
+        return pd.Series([min_s, max_s, (min_s + max_s) / 2])
+        
+    return pd.Series([np.nan, np.nan, np.nan])
+
+# Apply this function across the whole column and save into three new columns
+df[['min_salary_k', 'max_salary_k', 'avg_salary_k']] = df['Salary Estimate'].apply(parse_salary)
+
+
+---
+
+STEP 4: Clean the "Company Name"
+-------------
+Explanation: Company names often had a newline followed by a number rating attached (e.g. "Vera Institute of Justice\n3.2"). We use a split function to divide the text at the "\n" boundary, and we take only the [0] index (the very first part, before the split).
+
+Code:
+# Split the string by '\n' and take the first item
+df['Company Name'] = df['Company Name'].apply(lambda x: str(x).split('\n')[0] if pd.notna(x) else x)
+
+
+---
+
+STEP 5: Extract "Job State"
+-------------
+Explanation: The Location was formatted as "City, State". To do state-by-state analysis later, we split the text at the comma, and grab the [-1] index (the very last part of the split, which is the state). We use .strip() to remove any accidental spaces.
+
+Code:
+# Split by comma and take the last part
+df['Job State'] = df['Location'].apply(lambda x: str(x).split(',')[-1].strip() if pd.notna(x) and ',' in str(x) else str(x))
+
+
+---
+
+STEP 6: Reorder and Save
+-------------
+Explanation: We created new, useful columns, but they are pushed to the far right side of the table. We pull our favorite columns to the front of the list, then save the final product out as a new CSV file so we never overwrite our raw, original data.
+
+Code:
+important_cols = ['Job Title', 'Company Name', 'Location', 'Job State', 'min_salary_k', 'max_salary_k', 'avg_salary_k']
+all_columns = list(df.columns)
+
+# Remove the important columns from wherever they are
+for col in important_cols:
+    if col in all_columns: 
+        all_columns.remove(col)
+        
+# Glue the important ones back onto the front of the list
+df = df[important_cols + all_columns]
+
+# Save the table without exporting the annoying index numbers
+df.to_csv('data/processed/cleaned_jobs.csv', index=False)

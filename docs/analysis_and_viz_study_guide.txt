@@ -1,0 +1,116 @@
+ANALYSIS & VISUALIZATION STUDY GUIDE
+====================================
+This document explains the final script (`analysis_and_viz.py`). In this stage, we take our fully cleaned and enriched data, calculate the final insights (like medians and percentages), and use graph libraries to draw bar charts.
+
+---
+
+STEP 1: Import Visualization Libraries
+-------------
+Explanation: While `pandas` is great at manipulating data tables, it isn't the best at drawing beautiful charts. We bring in `matplotlib` and `seaborn`. Seaborn is built directly on top of matplotlib, but it automatically makes charts look much more modern and professional with its "set_theme" styling.
+
+Code:
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as plt_sns
+import os
+
+# This single line instantly upgrades the background and gridlines of our charts!
+plt_sns.set_theme(style="whitegrid")
+
+
+---
+
+STEP 2: Calculate "Skill Demand" Percentages
+-------------
+Explanation: Before we can draw a chart showing which skills are most demanded, we have to calculate the total counts and turn them into percentages. We use a "dictionary comprehension" (a fast loop) to sum the "True/False" columns, and then calculate what percentage of the total job postings those counts represent.
+
+Code:
+skills = ['Python', 'SQL', 'Excel', 'Tableau', 'Power BI', 'R', 'AWS', 'Spark', 'Machine Learning']
+
+# 1. Sum up all the 'True' values for each skill column
+skill_counts = {skill: df[f'Requires_{skill}'].sum() for skill in skills}
+
+# 2. Divide by the total number of rows (len(df)) and multiply by 100 for percentage
+skill_pct = {skill: (count / len(df)) * 100 for skill, count in skill_counts.items()}
+
+# 3. Sort the dictionary from highest percentage to lowest so our chart looks neat
+skill_pct_sorted = dict(sorted(skill_pct.items(), key=lambda item: item[1], reverse=True))
+
+
+---
+
+STEP 3: Draw a Bar Chart (Skill Demand)
+-------------
+Explanation: Now that we have the math sorted, we tell `seaborn` (plt_sns) to draw a horizontal bar plot (`barplot`). The x-axis is our calculated percentages, and the y-axis is the skill name. We save it as a PNG file when we're done.
+
+Code:
+# Set the canvas size (width=10, height=6)
+plt.figure(figsize=(10, 6))
+
+# Tell Seaborn to draw a Bar Plot. "viridis" is the color palette name.
+ax = plt_sns.barplot(x=list(skill_pct_sorted.values()), y=list(skill_pct_sorted.keys()), palette="viridis")
+
+# Add a Title and axis labels
+plt.title('Most Demanded Skills for Data Analysts', fontsize=16)
+plt.xlabel('Percentage of Job Postings (%)', fontsize=12)
+plt.ylabel('Skill', fontsize=12)
+
+# Fix spacing so titles don't get cut off, then save the file!
+plt.tight_layout()
+plt.savefig('docs/skill_demand.png')
+plt.close() # Close the canvas to free up computer memory
+
+
+---
+
+STEP 4: Understand "GroupBy" for State Salaries
+-------------
+Explanation: We want to find the median salary for each individual US State. In pandas, grouping data by categories (like States) and then running math (like Median calculation) on those groups is done using `.groupby()`. We only want the top 15 states, so we use `.head(15)`.
+
+Code:
+# 1. Group all rows by 'Job State'
+# 2. Extract their 'avg_salary_k'
+# 3. Calculate the median ()
+# 4. Sort from highest to lowest
+state_salary = df.groupby('Job State')['avg_salary_k'].median().sort_values(ascending=False).head(15)
+
+# Then we draw it (same logic as Step 3!)
+plt.figure(figsize=(10, 6))
+plt_sns.barplot(x=state_salary.values, y=state_salary.index, palette="mako")
+# ... (title, labels, and saving logic excluded to save space)
+
+
+---
+
+STEP 5: Calculate Salary Premium by Skill (Does knowing Python pay more?)
+-------------
+Explanation: This is the ultimate question! To figure this out, we need to filter the dataset. We use `df[df[col] == True]` to temporarily grab ONLY the job postings that mandate a specific skill. Then, we look at the median salary of just those jobs.
+We also calculate the "baseline" salary (the median of ALL jobs, regardless of skills) so we can draw a dotted red line for comparison.
+
+Code:
+skill_salaries = {}
+baseline_salary = df['avg_salary_k'].median()
+
+# Loop through all our tools
+for skill in skills:
+    col = f'Requires_{skill}'
+    
+    # 1. Filter: df[col] == True (Grab only jobs asking for this skill)
+    # 2. Extract: ['avg_salary_k'] (Look at their salaries)
+    # 3. Calculate: .median() (Find their exact middle salary)
+    median_sal = df[df[col] == True]['avg_salary_k'].median()
+    
+    # If the math didn't break, save it to our dictionary
+    if pd.notna(median_sal):
+        skill_salaries[skill] = median_sal
+        
+# Sort the salaries from highest to lowest like we did in Step 2.
+skill_sal_sorted = dict(sorted(skill_salaries.items(), key=lambda item: item[1], reverse=True))
+
+# Draw the chart (same logic as Step 3)
+plt.figure(figsize=(10, 6))
+ax = plt_sns.barplot(x=list(skill_sal_sorted.keys()), y=list(skill_sal_sorted.values()), palette="rocket")
+
+# Extra feature: Add a horizontal line to represent the baseline overall salary!
+plt.axhline(baseline_salary, color='red', linestyle='--', label=f'Overall Median (${baseline_salary}K)')
+# ... (title, labels, and saving logic excluded to save space)

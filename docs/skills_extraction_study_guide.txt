@@ -1,0 +1,76 @@
+SKILLS EXTRACTION STUDY GUIDE
+=============================
+This document explains the logic behind our second script (`skills_extraction.py`). We took our newly cleaned dataset and performed text mining to figure out which tech skills are required for each job.
+
+---
+
+STEP 1: Define the Tools with "Regular Expressions" (Regex)
+-------------
+Explanation: We created a dictionary map to store all the skills we want to search for. However, instead of a simple word search, we used "Regex" patterns like `r'\bsql\b'`. 
+Why? Because if we just search for the simple letter "R", we will accidentally highlight the "R" in the word "Retail"! The `\b` boundary tag tells Python to only match if it is an isolated word by itself (i.e. not connected to other letters).
+
+Code:
+import pandas as pd
+import re
+
+# We define the strict patterns we're looking for
+skills_regex = {
+    'Python': r'\bpython\b',
+    'SQL': r'\bsql\b',
+    'Excel': r'\bexcel\b',
+    'Tableau': r'\btableau\b',
+    'Power BI': r'\bpower\s*bi\b',
+    'R': r'\br\b',   # Just the letter R as an isolated word
+    'AWS': r'\baws\b',
+    'Spark': r'\bspark\b',
+    'Machine Learning': r'\bmachine learning\b|\bml\b' # Look for either 'machine learning' OR 'ml'
+}
+
+---
+
+STEP 2: Standardizing the Text
+-------------
+Explanation: Searching through text is hard if some recruiters write "SQL", some write "Sql", and some write "sql". We pull the `Job Description` column out, convert the entire massive block of text to lowercase letters, and handle any completely empty cells (`fillna('')`). 
+
+Code:
+# Force all job descriptions to be strings and lowercase them
+job_desc = df['Job Description'].fillna('').astype(str).str.lower()
+
+
+---
+
+STEP 3: Text Search Loop (Creating New Binary Columns)
+-------------
+Explanation: We use a "For Loop" to iterate through every single skill in our dictionary map. For each skill, we check if the pattern exists in the job description using pandas' `.str.contains()` function. This outputs `True` if it finds the word, and `False` if it does not. We save these True/False (Binary) flags as brand new columns. We use the `re.IGNORECASE` flag to ensure we don't miss anything.
+
+Code:
+# Loop through the dictionary values
+for skill, pattern in skills_regex.items():
+    
+    # We dynamically name our new column (e.g. "Requires_SQL" or "Requires_Python")
+    col_name = f'Requires_{skill}'
+    
+    # Check if the regex pattern is inside the lowercase job description string.
+    # Returns True/False and assigns it to the new column
+    df[col_name] = job_desc.str.contains(pattern, flags=re.IGNORECASE, regex=True)
+
+
+---
+
+STEP 4: Display Summary & Save
+-------------
+Explanation: Before saving the file, we can easily calculate how many jobs required each tool! Because pandas treats `True` as a mathematical `1` and `False` as an `0`, we can literally just add up (.sum()) the whole column to get the total number of jobs that required that skill. Then, we save it as `enriched_jobs.csv`.
+
+Code:
+print("Skill Demand Summary:")
+for skill in skills_regex.keys():
+    
+    # Add up all the 'True' values to get a total count
+    count = df[f'Requires_{skill}'].sum()
+    
+    # Calculate percentage (Count / Total Rows) * 100
+    pct = (count / len(df)) * 100
+    print(f"{skill}: {count} jobs ({pct:.1f}%)")
+
+# Save out the new CSV with the new 'Requires_XYZ' columns attached
+df.to_csv('data/processed/enriched_jobs.csv', index=False)

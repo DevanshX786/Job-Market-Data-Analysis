@@ -1,0 +1,13 @@
+venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# Ignore raw data files but keep the directory
+data/raw/*
+!data/raw/.gitkeep
+
+# Ignore processed data files but keep the directory
+data/processed/*
+!data/processed/.gitkeep
